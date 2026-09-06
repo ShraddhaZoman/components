@@ -6,8 +6,9 @@
  * found in the LICENSE file at https://angular.dev/license
  */
 
-import {KeyboardEventManager, ClickEventManager, Modifier} from '../behaviors/event-manager';
 import {computed, signal, untracked} from '@angular/core';
+import {_getEventTarget} from '@angular/cdk/platform';
+import {KeyboardEventManager, ClickEventManager, Modifier} from '../behaviors/event-manager';
 import {SignalLike, WritableSignalLike} from '../behaviors/signal-like/signal-like';
 import {ExpansionItem} from '../behaviors/expansion/expansion';
 
@@ -216,6 +217,12 @@ export class ComboboxPattern {
 
   /** Handles focus out events for the combobox. */
   onFocusout() {
+    this.isFocused.set(false);
+    this.closePopupOnFocusout();
+  }
+
+  /** Closes the popup once focus has left both the combobox and the popup. */
+  closePopupOnFocusout() {
     // Give focus some time to move before we check it.
     setTimeout(() => {
       const comboboxFocused = this.isFocused();
@@ -225,17 +232,15 @@ export class ComboboxPattern {
         this.inputs.expanded.set(false);
       }
     });
-
-    this.isFocused.set(false);
   }
 
   /** Handles input events for the combobox. */
   onInput(event: Event) {
-    if (!(event.target instanceof HTMLInputElement)) return;
-    if (this.disabled() || this.readonly()) return;
+    const target = _getEventTarget(event);
+    if (!(target instanceof HTMLInputElement) || this.disabled() || this.readonly()) return;
 
     this.inputs.expanded.set(true);
-    this.value.set(event.target.value);
+    this.value.set(target.value);
     this.isDeleting.set(event instanceof InputEvent && !!event.inputType.match(/^delete/));
   }
 
@@ -290,6 +295,9 @@ export interface ComboboxPopupInputs {
 
   /** The ID of the popup. */
   popupId: SignalLike<string | undefined>;
+
+  /** A reference to the parent combobox. */
+  combobox: SignalLike<ComboboxPattern | undefined>;
 }
 
 /** Controls the state of a simple combobox popup. */
@@ -305,6 +313,9 @@ export class ComboboxPopupPattern {
 
   /** The ID of the popup. */
   readonly popupId = () => this.inputs.popupId();
+
+  /** A reference to the parent combobox. */
+  readonly combobox = () => this.inputs.combobox();
 
   /** Whether the popup is focused. */
   readonly isFocused = signal(false);
@@ -322,5 +333,6 @@ export class ComboboxPopupPattern {
     if (this.controlTarget()?.contains(focusTarget)) return;
 
     this.isFocused.set(false);
+    this.combobox()?.closePopupOnFocusout();
   }
 }
